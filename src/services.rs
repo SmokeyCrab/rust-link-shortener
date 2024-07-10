@@ -20,14 +20,19 @@ mod hyper_template_funcs;
 
 use crate::db;
 use crate::config;
+use crate::connection;
 
 async fn post_service(
-    client: Arc<tokio_postgres::Client>,
+    client: Arc<connection::ClientContext>,
+    pg_client: Arc<tokio_postgres::Client>,
     host_config: Arc<config::HostConfig>,
+    pg_config: Arc<config::PostgresConfig>,
     req: Request<hyper::body::Incoming>
 ) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
+    println!("✅ {}:{} ➡️ {} {}", client.ip, client.port, req.method(), req.uri().path());
     match (req.method(), req.uri().path()) {
-        (&Method::GET, "/") =>
+        (&Method::GET, "/") => {
+            // println!("Request Received GET@\"/\"-{}",req.)
             Ok(
                 Response::new(
                     hyper_template_funcs::full(
@@ -37,7 +42,8 @@ async fn post_service(
                         ).unwrap()
                     )
                 )
-            ),
+            )
+        }
 
         //TODO Write posts into db
         //TODO Read GET from db
@@ -51,8 +57,10 @@ async fn post_service(
 }
 
 pub fn create_service<'a>(
-    client: Arc<tokio_postgres::Client>,
-    host_config: Arc<config::HostConfig>
+    client: Arc<connection::ClientContext>,
+    pg_client: Arc<tokio_postgres::Client>,
+    host_config: Arc<config::HostConfig>,
+    pg_config: Arc<config::PostgresConfig>
 ) -> impl Fn(
     Request<hyper::body::Incoming>
 ) -> Pin<
@@ -64,7 +72,11 @@ pub fn create_service<'a>(
 > {
     move |req: Request<hyper::body::Incoming>| {
         let client_clone = Arc::clone(&client);
+        let pg_client_clone = Arc::clone(&pg_client);
         let host_config_clone = Arc::clone(&host_config);
-        Box::pin(post_service(client_clone, host_config_clone, req))
+        let pg_config_clone = Arc::clone(&pg_config);
+        Box::pin(
+            post_service(client_clone, pg_client_clone, host_config_clone, pg_config_clone, req)
+        )
     }
 }

@@ -1,26 +1,20 @@
-use std::ptr;
-
-use std::convert::Infallible;
 use std::net::{ SocketAddr, IpAddr };
 use std::str::FromStr;
 use std::sync::Arc;
 
 // Services
-use hyper::body::Bytes;
+
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper_util::rt::TokioIo;
 use tokio::net::TcpListener;
-use tokio_postgres::{ NoTls, Error, Client, Connection, Socket };
-use tokio_postgres::tls::{ NoTlsStream };
 
 // Routing
-use hyper::body::Frame;
-use hyper::{ body::Body, Method, Request, Response, StatusCode };
-use http_body_util::{ combinators::BoxBody, BodyExt, Empty, Full };
+
 mod db;
 mod services;
 mod config;
+mod connection;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -32,7 +26,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     println!("Connecting to DB");
 
-    let (big_client, big_connection) = db::start_connection(
+    let (pg_client, pg_connection) = db::start_connection(
         &pg_config.postgres_user,
         &pg_config.postgres_ip,
         &pg_config.postgres_password,
@@ -43,12 +37,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     println!("Complete!");
 
     tokio::spawn(async move {
-        if let Err(e) = big_connection.await {
+        if let Err(e) = pg_connection.await {
             eprintln!("Connection error: {}", e);
         }
     });
 
-    let rows = big_client.query("SELECT * FROM tester", &[]).await?;
+    let rows = pg_client.query("SELECT * FROM tester", &[]).await?;
 
     let value: &str = rows[0].get(0);
     println!("{}", value);
@@ -66,26 +60,51 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Cannot be sent between threads safely,
     // therefore cloning for each thread is necessary
     // for postgres client and service handler
-    let big_client_pointer = Arc::new(big_client);
+    let pg_client_pointer = Arc::new(pg_client);
     let host_config_pointer = Arc::new(host_config);
-    let main_service = Arc::new(services::create_service(big_client_pointer, host_config_pointer));
+    let pg_config_pointer = Arc::new(pg_config);
+
+    // let main_service = Arc::new(services::create_service(pg_client_pointer, host_config_pointer, pg_config_pointer));
 
     loop {
-        let (stream, _) = listener.accept().await?;
+        let (stream, addr) = listener.accept().await?;
+
+        let client_connection = Arc::new(connection::ClientContext::new(addr.ip(), addr.port()));
+        let thread_client_connection = Arc::clone(&client_connection);
+        let pg_client_clone = Arc::clone(&pg_client_pointer);
+        let host_config_clone = Arc::clone(&host_config_pointer);
+        let pg_config_clone = Arc::clone(&pg_config_pointer);
+
+        println!("⚠️ New Client: {addr:?}");
 
         let io = TokioIo::new(stream);
 
-        let main_service_clone = Arc::clone(&main_service);
+        // let main_service_clone = Arc::clone(&main_service);
+
+        let main_service = Arc::new(
+            services::create_service(
+                client_connection,
+                pg_client_clone,
+                host_config_clone,
+                pg_config_clone
+            )
+        );
 
         tokio::task::spawn(async move {
+            let builder = http1::Builder::new();
             if
-                let Err(err) = http1::Builder::new().serve_connection(
+                let Err(err) = builder.serve_connection(
                     io,
-                    service_fn(move |req| main_service_clone(req))
+                    service_fn(move |req| main_service(req))
                 ).await
             {
                 eprintln!("Error serving connection {:?}", err);
             }
+            println!(
+                "⛔ {}:{} disconnected",
+                thread_client_connection.ip,
+                thread_client_connection.port
+            );
         });
     }
 }

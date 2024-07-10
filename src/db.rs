@@ -1,4 +1,4 @@
-use tokio_postgres::{ NoTls, Error, Client, Connection, Socket };
+use tokio_postgres::{ NoTls, Socket };
 use tokio_postgres::tls::{ NoTlsStream };
 
 pub async fn start_connection(
