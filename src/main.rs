@@ -1,7 +1,8 @@
 use std::ptr;
 
 use std::convert::Infallible;
-use std::net::SocketAddr;
+use std::net::{ SocketAddr, IpAddr };
+use std::str::FromStr;
 use std::sync::Arc;
 
 // Services
@@ -19,18 +20,28 @@ use hyper::{ body::Body, Method, Request, Response, StatusCode };
 use http_body_util::{ combinators::BoxBody, BodyExt, Empty, Full };
 mod db;
 mod services;
+mod config;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     println!("Starting");
+
+    println!("Reading from config");
+    let (pg_config, host_config) = config::get_config()?;
+    println!("Complete!");
+
+    println!("Connecting to DB");
+
     let (big_client, big_connection) = db::start_connection(
-        "HIDDEN",
-        "HIDDEN",
-        "HIDDEN",
-        "Hello",
-        "5432"
+        &pg_config.postgres_user,
+        &pg_config.postgres_ip,
+        &pg_config.postgres_password,
+        &pg_config.postgres_database_name,
+        &pg_config.postgres_port
     ).await?;
-    println!("Connected to DB");
+
+    println!("Complete!");
+
     tokio::spawn(async move {
         if let Err(e) = big_connection.await {
             eprintln!("Connection error: {}", e);
@@ -42,14 +53,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let value: &str = rows[0].get(0);
     println!("{}", value);
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
+    let addr = SocketAddr::from((
+        IpAddr::from_str(&host_config.host_ip)?,
+        (&host_config.host_port).parse::<u16>().unwrap(),
+    ));
     let listener = TcpListener::bind(addr).await?;
 
-    // Cannot be sent between threads safely, 
+    // Cannot be sent between threads safely,
     // therefore cloning for each thread is necessary
     // for postgres client and service handler
     let big_client_pointer = Arc::new(big_client);
-    let main_service = Arc::new(services::get_service(big_client_pointer));
+    let main_service = Arc::new(services::create_service(big_client_pointer));
 
     loop {
         let (stream, _) = listener.accept().await?;

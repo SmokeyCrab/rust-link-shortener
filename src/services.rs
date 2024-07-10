@@ -22,18 +22,34 @@ async fn post_service(
     client: Arc<tokio_postgres::Client>,
     req: Request<hyper::body::Incoming>
 ) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
-   //TODO Write posts into db
-   //TODO Read GET from db
+    match (req.method(), req.uri().path()) {
+        (&Method::GET, "/") =>
+            Ok(Response::new(hyper_template_funcs::full("Echo active, use /echo for POST"))),
+
+        //TODO Write posts into db
+        //TODO Read GET from db
+
+        _ => {
+            let mut not_found = Response::new(hyper_template_funcs::empty());
+            *not_found.status_mut() = StatusCode::NOT_FOUND;
+            Ok(not_found)
+        }
+    }
 }
 
-pub fn get_service<'a>(
+pub fn create_service<'a>(
     client: Arc<tokio_postgres::Client>
-) -> impl (Fn(
+) -> impl Fn(
     Request<hyper::body::Incoming>
 ) -> Pin<
-    Box<dyn Future<Output = Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error>> + Send + 'a>
->) {
-    move |req: Request<hyper::body::Incoming>| { 
-      let client_clone = Arc::clone(&client);
-      Box::pin(post_service(client_clone, req)) }
+    Box<
+        dyn Future<Output = Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error>> +
+            Send +
+            'a
+    >
+> {
+    move |req: Request<hyper::body::Incoming>| {
+        let client_clone = Arc::clone(&client);
+        Box::pin(post_service(client_clone, req))
+    }
 }
