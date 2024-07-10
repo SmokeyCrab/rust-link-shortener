@@ -53,17 +53,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let value: &str = rows[0].get(0);
     println!("{}", value);
 
+    println!("Binding to port {}", &host_config.host_port);
     let addr = SocketAddr::from((
         IpAddr::from_str(&host_config.host_ip)?,
         (&host_config.host_port).parse::<u16>().unwrap(),
     ));
     let listener = TcpListener::bind(addr).await?;
 
+    println!("Complete!");
+
+    println!("Starting service");
     // Cannot be sent between threads safely,
     // therefore cloning for each thread is necessary
     // for postgres client and service handler
     let big_client_pointer = Arc::new(big_client);
-    let main_service = Arc::new(services::create_service(big_client_pointer));
+    let host_config_pointer = Arc::new(host_config);
+    let main_service = Arc::new(services::create_service(big_client_pointer, host_config_pointer));
 
     loop {
         let (stream, _) = listener.accept().await?;

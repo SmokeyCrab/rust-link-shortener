@@ -1,4 +1,4 @@
-use serde::{ Deserialize, Serialize };
+use serde::{ Deserialize };
 use std::fs;
 use std::error::Error;
 
@@ -16,6 +16,7 @@ pub struct PostgresConfig {
 pub struct HostConfig {
     pub host_ip: String,
     pub host_port: String,
+    pub host_url: String,
 }
 
 // pub enum ConfigError {
