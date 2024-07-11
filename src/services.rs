@@ -45,7 +45,7 @@ async fn url_shorten_service(
         }
         (&Method::GET, "/favicon.ico") => { Ok(responses::favicon()?) }
         (&Method::POST, "/") => { Ok(responses::fail()?) }
-        _ if req.method() == &Method::GET && valid_shortened_url(req.uri().path()) => {
+        (&Method::GET , _) if valid_shortened_url(req.uri().path()) => {
             println!("HERE");
             Ok(responses::fail()?)
         }
