@@ -16,13 +16,21 @@ use std::sync::Arc;
 
 use sprintf::sprintf;
 
-mod hyper_template_funcs;
+use regex::Regex;
+
+mod responses;
+use responses::hyper_template_funcs;
 
 use crate::db;
 use crate::config;
 use crate::connection;
 
-async fn post_service(
+fn valid_shortened_url(url: &str) -> bool {
+    let re = Regex::new(r"^/.{5}").unwrap();
+    return re.is_match(url);
+}
+
+async fn url_shorten_service(
     client: Arc<connection::ClientContext>,
     pg_client: Arc<tokio_postgres::Client>,
     host_config: Arc<config::HostConfig>,
@@ -33,26 +41,16 @@ async fn post_service(
     match (req.method(), req.uri().path()) {
         (&Method::GET, "/") => {
             // println!("Request Received GET@\"/\"-{}",req.)
-            Ok(
-                Response::new(
-                    hyper_template_funcs::full(
-                        sprintf!(
-                            "Welcome to the URL Shortener, POST a URL to \"%s/\"",
-                            host_config.host_url
-                        ).unwrap()
-                    )
-                )
-            )
+            Ok(responses::home(host_config)?)
+        }
+        (&Method::GET, "/favicon.ico") => { Ok(responses::favicon()?) }
+        (&Method::POST, "/") => { Ok(responses::fail()?) }
+        _ if req.method() == &Method::GET && valid_shortened_url(req.uri().path()) => {
+            println!("HERE");
+            Ok(responses::fail()?)
         }
 
-        //TODO Write posts into db
-        //TODO Read GET from db
-
-        _ => {
-            let mut not_found = Response::new(hyper_template_funcs::empty());
-            *not_found.status_mut() = StatusCode::NOT_FOUND;
-            Ok(not_found)
-        }
+        _ => { Ok(responses::fail()?) }
     }
 }
 
@@ -76,7 +74,13 @@ pub fn create_service<'a>(
         let host_config_clone = Arc::clone(&host_config);
         let pg_config_clone = Arc::clone(&pg_config);
         Box::pin(
-            post_service(client_clone, pg_client_clone, host_config_clone, pg_config_clone, req)
+            url_shorten_service(
+                client_clone,
+                pg_client_clone,
+                host_config_clone,
+                pg_config_clone,
+                req
+            )
         )
     }
 }
