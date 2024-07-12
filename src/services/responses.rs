@@ -112,8 +112,7 @@ pub async fn write(
 
     let mut new_id: String;
 
-    while (
-        {
+    while {
             new_id = generate(5, charset);
             let rows1 = pg_client
                 .query(
@@ -125,8 +124,7 @@ pub async fn write(
                 ).await
                 .expect("SQL query failed");
             rows1.len() != 0
-        }
-    ) {}
+        } {}
     println!("{} {}", new_id, url);
 
     let _rows2 = pg_client
