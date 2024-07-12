@@ -1,27 +1,17 @@
-use tokio_postgres::{ NoTls, Error, Client, Connection, Socket };
-use tokio_postgres::tls::{ NoTlsStream };
 use hyper::body::Bytes;
-use hyper::server::conn::http1;
-use hyper::service::service_fn;
-use hyper_util::rt::TokioIo;
 
-use hyper::body::Frame;
-use hyper::{ body::Body, Method, Request, Response, StatusCode };
-use http_body_util::{ combinators::BoxBody, BodyExt, Empty, Full };
+use hyper::{ Method, Request, Response };
+use http_body_util::{ combinators::BoxBody };
 
 use std::future::Future;
 use std::boxed::Box;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use sprintf::sprintf;
-
 use regex::Regex;
 
 mod responses;
-use responses::hyper_template_funcs;
 
-use crate::db;
 use crate::config;
 use crate::connection;
 
@@ -41,9 +31,7 @@ async fn url_shorten_service(
     match (req.method(), req.uri().path()) {
         (&Method::GET, "/") => { Ok(responses::home(host_config)?) }
         (&Method::GET, "/favicon.ico") => { Ok(responses::favicon()?) }
-        (&Method::POST, "/") => {
-            Ok(responses::write(pg_client, host_config, pg_config, req).await?)
-        }
+        (&Method::POST, "/") => { Ok(responses::write(pg_client, host_config, req).await?) }
         (&Method::GET, _) if valid_shortened_url(req.uri().path()) => {
             Ok(responses::retrieve(pg_client, pg_config, req.uri().path()).await?)
         }

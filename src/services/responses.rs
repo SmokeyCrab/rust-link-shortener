@@ -1,22 +1,11 @@
-use tokio_postgres::{ NoTls, Error, Client, Connection, Socket };
-use tokio_postgres::tls::{ NoTlsStream };
 use hyper::body::Bytes;
-use hyper::server::conn::http1;
-use hyper::service::service_fn;
-use hyper_util::rt::TokioIo;
 
-use hyper::body::Frame;
-use hyper::{ body::Body, Method, Request, Response, StatusCode };
-use http_body_util::{ combinators::BoxBody, BodyExt, Empty, Full };
+use hyper::{ body::Body, Request, Response, StatusCode };
+use http_body_util::{ combinators::BoxBody, BodyExt };
 
-use std::future::Future;
-use std::boxed::Box;
-use std::pin::Pin;
 use std::sync::Arc;
 
 use sprintf::sprintf;
-
-use regex::Regex;
 
 use hex;
 
@@ -26,9 +15,7 @@ use random_string::generate;
 
 pub mod hyper_template_funcs;
 
-use crate::db;
 use crate::config;
-use crate::connection;
 
 pub fn fail() -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
     let mut not_found = Response::new(hyper_template_funcs::empty());
@@ -65,7 +52,7 @@ pub fn favicon() -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error>
 
 pub async fn retrieve(
     pg_client: Arc<tokio_postgres::Client>,
-    pg_config: Arc<config::PostgresConfig>,
+    _pg_config: Arc<config::PostgresConfig>,
     url: &str
 ) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
     let upper_url = url.to_uppercase();
@@ -105,7 +92,6 @@ pub async fn retrieve(
 pub async fn write(
     pg_client: Arc<tokio_postgres::Client>,
     host_config: Arc<config::HostConfig>,
-    pg_config: Arc<config::PostgresConfig>,
     req: Request<hyper::body::Incoming>
 ) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
     // Buffer full request (Based on Hyper Example docs /echo/reversed)
