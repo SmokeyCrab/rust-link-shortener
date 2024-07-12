@@ -42,10 +42,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         }
     });
 
-    let rows = pg_client.query("SELECT * FROM tester", &[]).await?;
+    // let rows = pg_client.query("SELECT * FROM tester", &[]).await?;
 
-    let value: &str = rows[0].get(0);
-    println!("{}", value);
+    // let value: &str = rows[0].get(0);
+    // println!("{}", value);
 
     println!("Binding to port {}", &host_config.host_port);
     let addr = SocketAddr::from((

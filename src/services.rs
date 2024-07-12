@@ -39,15 +39,13 @@ async fn url_shorten_service(
 ) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
     println!("✅ {}:{} ➡️ {} {}", client.ip, client.port, req.method(), req.uri().path());
     match (req.method(), req.uri().path()) {
-        (&Method::GET, "/") => {
-            // println!("Request Received GET@\"/\"-{}",req.)
-            Ok(responses::home(host_config)?)
-        }
+        (&Method::GET, "/") => { Ok(responses::home(host_config)?) }
         (&Method::GET, "/favicon.ico") => { Ok(responses::favicon()?) }
-        (&Method::POST, "/") => { Ok(responses::fail()?) }
-        (&Method::GET , _) if valid_shortened_url(req.uri().path()) => {
-            println!("HERE");
-            Ok(responses::fail()?)
+        (&Method::POST, "/") => {
+            Ok(responses::write(pg_client, host_config, pg_config, req).await?)
+        }
+        (&Method::GET, _) if valid_shortened_url(req.uri().path()) => {
+            Ok(responses::retrieve(pg_client, pg_config, req.uri().path()).await?)
         }
 
         _ => { Ok(responses::fail()?) }
